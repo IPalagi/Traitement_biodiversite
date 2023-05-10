@@ -1,0 +1,189 @@
+---
+title: "Extraction_donnee_hydrobio"
+output: html_document
+date: "2023-05-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Utilisation de l'API Hub'eau pour accéder aux données sur les macro-invertébrés 
+
+## Chargement packages 
+
+```{r, eval=FALSE}
+library(tidyverse)
+library(hubeau)
+```
+## Identification du type de données/idicateurs disponibles 
+
+### Disponibles dans l'API 
+
+```{r,echo=FALSE, eval=FALSE}
+list_endpoints(api = "hydrobio")  
+
+list_params(api = "hydrobio",
+            endpoint = "indices")
+```
+### Disponibles pour la région Hdf (par départements) 
+
+#### Données sur les taxons 
+
+```{r, eval=FALSE}
+# récupérer les données de stations des départements de Hdf
+
+mes_departements<-c('02', '59', '60', '62', '80')
+
+map(.x= mes_departements,
+    .f= function(x){
+    get_hydrobio_stations_hydrobio(code_departement=x,
+                                 #  fields=c('code_station_hydrobio')
+                                   )}
+    )
+
+# stations par département 
+
+stations_02 <- get_hydrobio_stations_hydrobio(code_departement='02', fields=c('code_station_hydrobio')) %>% 
+  distinct()
+
+stations_59<-get_hydrobio_stations_hydrobio(code_departement='59',
+                                            fields=c('code_station_hydrobio')) %>% 
+  distinct()
+
+
+stations_60<-get_hydrobio_stations_hydrobio(code_departement='60',
+                                            fields=c('code_station_hydrobio')) %>% 
+  distinct()
+
+
+stations_62<-get_hydrobio_stations_hydrobio(code_departement='62',
+                                            fields=c('code_station_hydrobio')) %>% 
+  distinct()
+
+
+stations_80<-get_hydrobio_stations_hydrobio(code_departement='80',
+                                            fields=c('code_station_hydrobio')) %>% 
+  distinct() # stations par département 
+
+stations_hdf<-c(stations_02$code_station_hydrobio, 
+                stations_59$code_station_hydrobio,
+                stations_60$code_station_hydrobio,
+                stations_62$code_station_hydrobio,
+                stations_80$code_station_hydrobio)  # toutes les stations de la région
+
+
+
+# Récupérer les données de taxon pour la région hdf   
+taxons <- map_df(                         
+  .x = stations_hdf,
+  .f = function(x)
+    get_hydrobio_taxons(code_station_hydrobio = x
+                                  )
+) # taxons (dont taxons parents) pour la région hdf (pas de tri des colonnes)
+
+taxons_hdf<-taxons %>% 
+  select(code_station_hydrobio:libelle_station_hydrobio, # selection des colonnes qui m'intéressent
+         date_prelevement:libelle_appel_taxon,
+         resultat_taxon, 
+         code_departement) %>% 
+  mutate(date_prelevement=as.Date(date_prelevement))
+
+# séparation données taxons par département 
+
+taxons_02<-taxons_hdf %>% 
+  filter(code_departement=='02')
+
+taxons_59<-taxons_hdf %>% 
+  filter(code_departement=='59')
+
+taxons_60<-taxons_hdf %>% 
+  filter(code_departement=='60')
+
+taxons_62<-taxons_hdf %>% 
+  filter(code_departement=='62')
+
+taxons_80<-taxons_hdf %>% 
+  filter(code_departement=='80')
+   
+```
+
+Les data.frame 'stations_x' comprennent les codes, le libéllé et les coordonnées des stations hydrobio, un URL vers les fiches Sandre des stations, le code du cours d'eau et de la masse d'eau, des informations divserses sur les communes et la région et plein d'autres trucs qui m'intéresse pas => je ne garde que le code station, mais garder en tête que pas mal d'info complémentaires sur les stations 
+
+Dans la data.frame 'taxons', tout ce qui concerne les taxons parents n'est pas intéressant pour moi
+
+Remarque : vachement plus de données pour le département de l'Aisne (02) -> pourquoi ? (plus de stations parce que plus de cours d'eau ? Eventuellement demander à Stéphane Gamard)
+
+##### Données macro-invertébrées 
+
+
+```{r, eval=FALSE}
+taxons_macro_hdf<-taxons_hdf %>% 
+  filter(libelle_support=='Macroinvertébrés aquatiques') # filtrage des données qui concernent les macro_invertébrés 
+```
+
+Pour les données de taxons de macro-invertébrés, les données les plus anciennes datent de l'année 2010. Pas la sécheresse de 2003 too bad
+
+
+
+```{r}
+#save(taxons_hdf, 
+#taxons_02, 
+#taxons_59, 
+#taxons_60, 
+#taxons_62, 
+#taxons_80, 
+#taxons_macro_hdf, 
+#file = 'donees_taxons.RData')
+```
+
+
+#### Données pour indicateurs DCE 
+
+```{r, eval=FALSE}
+# Données de tous les indices sur la région hdf
+indices <- map_df(                         
+  .x = stations_hdf,
+  .f = function(x)
+    get_hydrobio_indices(code_station_hydrobio = x
+    )
+) 
+
+indices_hdf<-indices %>% 
+  select(code_indice:resultat_indice, 
+         code_departement,
+         code_support,
+         libelle_support) %>% 
+  mutate(date_prelevement=as.Date(date_prelevement))
+
+
+```
+
+Le data.frame 'indices' contient une variété d'indicateurs, autres que les 3 indicateurs de biosurveillance de la DCE (IBD, I2M2, IBMR) 
+
+```{r}
+unique(indices_hdf$libelle_indice)
+
+```
+
+##### Indices pour les macro-invertébrés  
+
+```{r}
+indices_macro_hdf<-indices_hdf %>% 
+  filter(libelle_support=='Macroinvertébrés aquatiques') 
+```
+
+Les indices disponibles pour les Hauts-de-France concernant les macro_invertébrés aquatiques sont (avec les codes associés):
+
+```{r, echo=FALSE, eval=TRUE}
+distinct(indices_macro_hdf[,1:2])
+```
+
+```{r}
+
+#filtrage de l'indicateur i2m2 et de ses métriques pour les hdf 
+i2m2_hdf<-indices_macro_hdf %>% 
+  filter(code_indice %in% c('7613','8050','8054','8055','8056','8057'))
+           
+```
+

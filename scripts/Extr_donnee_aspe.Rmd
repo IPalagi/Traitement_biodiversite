@@ -1,0 +1,152 @@
+---
+title: "Extraction_donnee_aspe"
+output: html_document
+date: "2023-05-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval=TRUE, warning = FALSE, message = FALSE)
+```
+
+# Extraction des données piscicoles 
+
+## Extraction des données relatives à l'IPR 
+
+### Chargement du fichier contenant des tables de données aspe (sauf données individuelles)
+
+```{r, eval=FALSE}
+load(file="../raw_data/tables_sauf_mei_2023_04_07_09_39_32.RData")
+```
+
+```{r}
+library(tidyverse)
+library(aspe)
+
+```
+
+
+
+### Création de la passerelle entre les tables de données aspe 
+
+Création de la passerelle avec la fonction (spécifique du package aspe) mef_creer_passerelle puis sélection des données de la passerelle uniquement pour les département des Hauts-de-France 
+
+```{r, eval=FALSE}
+passerelle<-mef_creer_passerelle()
+```
+
+```{r, eval=FALSE}
+passerelle_hdf<-passerelle %>% 
+  mef_ajouter_dept() %>%  #ajout d'une colonne numéro de département 
+  filter(dept %in% c('02', '59', '60', '62', '80')) %>% #filtrage des départements des Hdf 
+  select(dept, sta_id:ope_id) %>%   # selection des colonnes qui m'intéressent 
+  distinct() #suppression des lignes doublons (lignes générées à cause des colonnes de lots etc.)
+
+
+```
+
+Téléchargemet en RData du dictionnaire qui permet de comprendre les noms de variables du package "aspe":
+
+```{r, eval=FALSE}
+dictionnaire <-aspe::dictionnaire 
+
+save(dictionnaire, file=".../raw_data/dictionnaire.RData")
+```
+
+
+### Ajouts de colonnes sur les données des réseaux piscicoles de Hdf 
+
+Filtrage -> conservation des lignes qui concerne les réseau piscicoles. Ajout d'une colonne qui sépcifie le type de réseau pour lequel ont été fait les prélèvements. 
+Pour rappel : 
+-RCS (Réseau de Contrôle de Surveillance) : environ une station par masse d'eau, qui permet de donner des éléments sur l'état de la masse d'eau en question, objectif d'amélioration de la qualité à plus long terme
+-RRP (Réseau de Référence Pérenne) : réseau de stations "modèles", pas ou peu impactées par les activités humaines 
+-RHP (Réseau Hydrobiologique Piscicole) : réseau historique de l'OFB, objectif d'amélioration de la qualité à moyen terme 
+
+```{r}
+passerelle_hdf <- passerelle_hdf %>%
+  mef_ajouter_objectif() %>% 
+  filter(obj_libelle %in% c("RCS – Réseau de Contrôle de Surveillance",
+                            "RRP – Réseau de Référence Pérenne",
+                            "RHP – Réseau Hydrobiologique Piscicole"))
+```
+
+```{r}
+ipr <- passerelle_hdf %>% 
+  mef_ajouter_ipr() %>% 
+  mef_ajouter_ope_date() %>% 
+  filter(ope_date > lubridate::dmy("01/01/2002")) %>% 
+  mef_ajouter_libelle() %>% 
+  droplevels()
+```
+
+Mêmes données mais avec une colonne par année : 
+
+```{r, eval=FALSE}
+ipr_1c_par_an <- ipr_pivoter_1colonne_par_an(ipr_df = ipr)
+```
+ pop_id = 22128 ipr pour chaque année entre 2003 et 2022
+ 
+
+### Rajout des métriques de l'IPR 
+
+```{r}
+ipr<-ipr %>% 
+  mef_ajouter_metriques() %>% # ajout des métriques théoriques, observées et calculées (diff avec la référence)
+  select(-(ner_theorique:dti_observe)) #suppression des métriques autres que calculées qui ne me servent pas 
+ 
+
+```
+
+Le data frame "ipr" contient maintenant : 
+
+-les numéro de département (dept)
+-les identifiants de stations (sta_id) et leur libellé (nom de la station Sandre)(pop_libelle) 
+-les identifiants des points de prélèvement (pop_id)
+-les identifiants des opérations de prélèvement (ope_ide) et leurs dates (ope_date) et année (annee)
+
+-les informations relatives à l'IPR : 
+  o valeur (ipr)
+  o l'identifiant de la classe de l'IPR (cli_id)
+  o le libellé de la classe (cli_libelle)
+  
+-les métriques de l'IPR : 
+  o ner : nombre d'espèces rhéophiles 
+  o nel : nombre d'espèces lithophiles 
+  o nte : nombre total d'espèces 
+  o dit : densité d'individus tolérants 
+  o dio : densité d'individus omnivores 
+  o dii : densité d'individus invertivores 
+  o dti : densité totale d'individus 
+
+### Sélection des données pour les stations choisies 
+
+Après application des critères de sélection pour les stations à étudier (cf. note méthodologique) il reste les deux stations Sandre suivantes : 
+
+-03138390 : L'ESCHES A BORNEL 1 (sta_id = 5534)
+-03134730 : LA RIVIÈRE SAINTE-MARIE A GLAIGNES 1 (sta_id = 5483)
+
+```{r}
+# Filtrage du tableau ipr pour ces stations 
+
+ipr_selec<-ipr %>% 
+  filter(sta_id %in% c('5534','5483'))
+```
+
+Remarque : la station 5483 (rivière Sainte-Marie) fait partie du RRP
+
+L'IPR est disponible pour ces stations tous les deux ans de 2008 à 2022 (inutile de remonter avant 2008 car il n'ya pas de données de température de l'eau avant cette date pour ces stations), plus un prélèvement en 2013 pour la station 5483. 
+
+```{r, eval=FALSE}
+#téléchargement en RData du data frame "ipr_selec" 
+
+save(ipr_selec, file="../raw_data/ipr_selec.RData") 
+```
+
+
+## Extraction des données individuelles 
+
+### Chargement du fichier contenant les tables de mesures individuelles 
+
+```{r}
+load(file="../raw_data/mei_2023_05_10_10_16_44.RData") 
+```
+
