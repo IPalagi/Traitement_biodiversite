@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = TRUE, eval=TRUE, warning = FALSE, message = FALSE)
 ### Chargement du fichier contenant des tables de données aspe (sauf données individuelles)
 
 ```{r, eval=FALSE}
-load(file="../raw_data/tables_sauf_mei_2023_04_07_09_39_32.RData")
+load(file="../raw_data/tables_sauf_mei_2023_05_10_10_16_44.RData")
 ```
 
 ```{r}
@@ -62,7 +62,7 @@ Pour rappel :
 -RHP (Réseau Hydrobiologique Piscicole) : réseau historique de l'OFB, objectif d'amélioration de la qualité à moyen terme 
 
 ```{r}
-passerelle_hdf <- passerelle_hdf %>%
+passerelle_hdf_ipr <- passerelle_hdf %>%
   mef_ajouter_objectif() %>% 
   filter(obj_libelle %in% c("RCS – Réseau de Contrôle de Surveillance",
                             "RRP – Réseau de Référence Pérenne",
@@ -148,5 +148,72 @@ save(ipr_selec, file="../raw_data/ipr_selec.RData")
 
 ```{r}
 load(file="../raw_data/mei_2023_05_10_10_16_44.RData") 
+```
+
+### Création du data frame des mesures individuelles 
+
+#### Pour le département 60 
+
+Une nouvelle passerelle pour le département 60 (où se situent les deux stations sélectionnées) est crée. 
+
+```{r}
+#création de la passerelle pour les mesures individuelles du 60
+
+
+passerelle_60 <- mef_creer_passerelle()
+
+id_station_60 <- passerelle_60 %>%
+  mef_ajouter_dept() %>% # création du champ dept à partir du code Insee station (ou point si manquant)
+  filter(dept == '60' & # sélection des observations sur les numéros de dept
+           !is.na(sta_id)) %>% # suppression des sta_id manquants
+  pull(sta_id) %>%  # extraction des identifiants des stations
+  unique()
+
+data_mei_60 <- passerelle_60 %>% 
+  filter(sta_id %in% id_station_60)
+
+data_mei_60 <- data_mei_60 %>%
+  mef_ajouter_type_protocole() %>% 
+  filter(pro_libelle %in% c("Pêche complète à un ou plusieurs passages",
+                            "Pêche partielle par points (grand milieu)",
+                            "Pêche par ambiances",
+                            "Pêche partielle sur berge"))
+
+```
+
+Extraction des données de mesures individuelles pour le département 60 : 
+
+```{r}
+mesures_indiv <- data_mei_60 %>%
+  mef_ajouter_libelle() %>% # ajout nom station ou point
+  mef_ajouter_ope_date() %>% # date et année d'échantillonnage
+  mef_ajouter_passage() %>% # numéro du passage pour éventuellement filtrer dessus
+  mef_ajouter_lots() %>% # lots
+  mef_ajouter_esp() %>% # noms des espèces
+  mef_ajouter_mei() %>% # mesures individuelles
+  mef_ajouter_type_longueur() %>% # type de longueur mesurée
+  select(-mei_mep_id,
+         -tyl_id,
+         -mei_id,
+         -tlo_id) # suppression colonnes inutiles 
+   
+```
+
+Sauvegarde en RData du data frame des mesures individuelles : 
+
+```{r, eval=FALSE}
+save(mesures_indiv, file="../raw_data/mesures_indiv.RData") 
+```
+
+Il n'y a aucune données de poids pour les lots ... normal ? 
+
+Les colonnes mei_tlo_id et mei_mesures_relles semblent inversées ...
+
+#### Pour les deux stations sélectionnées 
+
+
+```{r}
+mei_selec <-mesures_indiv %>% 
+  filter(sta_id %in% c('5534','5483')) 
 ```
 
